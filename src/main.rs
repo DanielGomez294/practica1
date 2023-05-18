@@ -104,7 +104,7 @@ async fn select() -> Json<Response> {
             desc: "All data".to_string(),
         },
         Err(_err) => Response {
-            status: "404 Not Found".to_string(),
+            status: "404 No Encontrado".to_string(),
             data: vec![],
             desc: "No data".to_string(),
         },
