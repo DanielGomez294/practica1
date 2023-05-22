@@ -7,7 +7,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use bigdecimal::BigDecimal;
 
 use tower_http::cors::CorsLayer;
 
@@ -39,8 +38,7 @@ struct SelectToString {
 } //end struct select
 
 //struc delete
-#[derive(Deserialize)]
-
+#[derive(Deserialize, Serialize)]
 struct UuidLibro {
     id: String,
 }
@@ -51,8 +49,31 @@ struct UpResponse {
     status: String,
     rows_affected: bool,
     description: String,
+}// end struct delete
+
+//struc update
+
+#[derive(Deserialize, Serialize)]
+struct updateLibros{
+    id: String,
+    tshirt: String,
+    price: i64
 }
 
+#[derive(Serialize)]
+struct UpdateResponse{
+    status: String,
+    rows_affected: bool,
+    description: String
+}//end struct update
+
+//struc for id
+#[derive(Serialize)]
+struct selectuuid{
+    status: String,
+    data: updateLibros,
+    desc: String,
+}
 #[tokio::main]
 
 async fn main() {
@@ -64,6 +85,8 @@ async fn main() {
     let app = Router::new()
         .route("/select", get(select))
         .route("/delete", post(eliminar))
+        .route("/update", post(actualizar))
+        .route("/select/one", post(SelectId))
         .layer(
             CorsLayer::new()
                 .allow_origin(origins)
@@ -78,14 +101,50 @@ async fn main() {
 }
 
 async fn select() -> Json<Response> {
+    let pool = DB::connection().await;
+
+    let sql = sqlx::query_as!(
+            SelectTshirt,
+        "
+        SELECT * from styled
+        "
+    )
+    .fetch_all(&pool)
+    .await;
+
+    let response = match sql {
+        Ok(data) => Response {
+            status: "200 OK".to_string(),
+            data: data
+                .into_iter()
+                .map(|x| SelectToString {
+                    Uuid: x.id.to_string(),
+                    tshirt: x.tshirt,
+                    price: x.price,
+                })
+                .collect(),
+                desc: "success".to_string(),
+          
+        },
+        Err(_err) => Response {
+            status: "500 Internal Server Error".to_string(),
+            data: vec![],
+            desc: "error".to_string(),
+            
+        },
+    };
+
+    Json(response)
+}
+
+async fn selectt() -> Json<Response> {
     let db = DB::connection().await;
 
     let sql = sqlx::query_as!(
         SelectTshirt,
         "
-        SELECT *
-    FROM styled
-    "
+         SELECT * FROM styled 
+         "
     )
     .fetch_all(&db)
     .await;
@@ -104,7 +163,7 @@ async fn select() -> Json<Response> {
             desc: "All data".to_string(),
         },
         Err(_err) => Response {
-            status: "404 Not Found".to_string(),
+            status: StatusCode::CONFLICT.to_string(),
             data: vec![],
             desc: "No data".to_string(),
         },
@@ -136,10 +195,80 @@ async fn eliminar(Json(payload): Json<UuidLibro>) -> Json<UpResponse> {
         }
     } else {
         UpResponse {
-            status: "404 Not Found".to_string(),
+            status:  StatusCode::CONFLICT.to_string(),
             rows_affected: false,
             description: "No data".to_string(),
         }
     };
+    Json(response)
+}
+
+
+async fn actualizar(Json(payload): Json<updateLibros>) -> Json<UpdateResponse>{
+    let db = DB::connection().await;
+
+    let uuid = Uuid::parse_str(&payload.id).expect("error al transformar uuid");
+    
+    let sql = sqlx::query!(
+            r#"
+            UPDATE styled
+            SET tshirt = $1, price = $2
+            WHERE id = $3
+            "#,
+            payload.tshirt,
+            payload.price,
+            uuid
+    )
+    .execute(&db)
+    .await
+    .expect("error al transformar uuid")
+    .rows_affected();
+
+let response = if sql > 0{
+    UpdateResponse {
+        status: "200 OK".to_string(),
+        rows_affected: true,
+        description: "Actualizado".to_string(),
+    }
+}else{
+    UpdateResponse {
+        status:  StatusCode::CONFLICT.to_string(),
+        rows_affected: false,
+        description: "No data".to_string(),
+    }
+};
+
+Json(response)
+}
+
+
+async fn SelectId(Json(payload): Json<UuidLibro>) -> Json<selectuuid> {
+    let db = DB::connection().await;
+
+    let uuid = Uuid::parse_str(&payload.id).expect("error al transformar uuid");
+
+
+let sql = sqlx::query!(
+        "
+        SELECT * FROM styled
+        WHERE id = $1",
+        uuid
+    )
+    .fetch_all(&db)
+    .await
+    .expect("error al transformar uuid");
+
+
+    let response = selectuuid{
+        status: "200 OK".to_string(),
+        data: updateLibros{
+
+            id: sql[0].id.to_string(),
+            tshirt: sql[0].tshirt.to_string(),
+            price: sql[0].price,
+        },
+        desc: "All data".to_string(),
+    };
+
     Json(response)
 }
