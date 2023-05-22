@@ -163,7 +163,7 @@ async fn selectt() -> Json<Response> {
             desc: "All data".to_string(),
         },
         Err(_err) => Response {
-            status: StatusCode::CONFLICT.to_string(),
+            status: "404 Not Found".to_string(),
             data: vec![],
             desc: "No data".to_string(),
         },
